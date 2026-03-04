@@ -11,7 +11,7 @@ function SearchBar({ datos, setDatos, onSearch }) {
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-8">
       {/* Contenedor principal: Ajustamos el padding y el gap para mobile */}
-      <div className="bg-white shadow-xl border border-gray-100 rounded-[32px] md:rounded-full p-4 md:p-2 flex flex-col md:flex-row items-center gap-4 md:gap-0 transition-all">
+      <div className="bg-white shadow-xl border border-gray-100 rounded-4xl md:rounded-full p-4 md:p-2 flex flex-col md:flex-row items-center gap-4 md:gap-0 transition-all">
         
         {/* DONDE */}
         <div className="w-full md:flex-[1.5] px-6 py-2 hover:bg-gray-100 rounded-full cursor-pointer transition-colors">
