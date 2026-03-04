@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import Staylogo from "../assets/staylogo.png";
+import Staylogo from "../assets/Staylogo.png";
 import { Link } from "react-router-dom";
 
 function Navbar() {
