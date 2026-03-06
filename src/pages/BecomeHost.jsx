@@ -7,7 +7,6 @@ import Footer from "../components/Footer";
 const BecomeHost = () => {
     const navigate = useNavigate();
 
-    // Estado inicial del formulario para alojamientos en Colombia
     const [formData, setFormData] = useState({
         title: "",
         location: "",
@@ -18,12 +17,10 @@ const BecomeHost = () => {
         gallery: ["", "", "", ""],
     });
 
-    // Actualiza el estado al escribir en los inputs
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
-    // Maneja las URLs de la galería adicional
     const handleGalleryChange = (index, value) => {
         const newGallery = [...formData.gallery];
         newGallery[index] = value;
@@ -34,16 +31,19 @@ const BecomeHost = () => {
         e.preventDefault();
 
         try {
-            // Obtenemos el usuario autenticado
             const { data: { user }, error: userError } = await supabase.auth.getUser();
             
             if (userError || !user) {
-                alert("Debes iniciar sesión para publicar tu propiedad en Colombia.");
+                alert("Debes iniciar sesión para publicar en Colombia.");
                 return;
             }
 
-            // Inserción en 'properties_host' usando host_id para vincular al usuario
-            const { data: propertyData, error: propError } = await supabase
+            // 1. Filtramos las URLs de la galería que no estén vacías
+            const validGallery = formData.gallery.filter((url) => url.trim() !== "");
+
+            // 2. Insertamos TODO en una sola tabla (properties_host)
+            // Esto evita el error de la tabla 'property_images' que no existe
+            const { error: propError } = await supabase
                 .from("properties_host") 
                 .insert([
                     {
@@ -53,37 +53,18 @@ const BecomeHost = () => {
                         description: formData.description,
                         image_url: formData.image_url,
                         rating: formData.rating,
-                        user_id: user.id, // Vinculación correcta para Mis Publicaciones
+                        user_id: user.id,
+                        gallery: validGallery // <-- Guardamos el array de fotos aquí mismo
                     },
-                ])
-                .select();
+                ]);
 
             if (propError) throw propError;
 
-            const propertyId = propertyData[0].id;
+            alert("¡Alojamiento publicado con éxito en Colombia! 🇨🇴");
+            navigate("/home"); 
 
-            // Guardar fotos de la galería si existen
-            const validGallery = formData.gallery.filter((url) => url.trim() !== "");
-
-            if (validGallery.length > 0) {
-                const galleryRows = validGallery.map((url) => ({
-                    property_id: propertyId,
-                    url: url,
-                }));
-
-                const { error: galleryError } = await supabase
-                    .from("property_images") 
-                    .insert(galleryRows);
-
-                if (galleryError) {
-                    console.warn("Propiedad creada, pero error en galería:", galleryError.message);
-                }
-            }
-
-            // Redirección tras éxito
-            navigate("/host-success");
         } catch (error) {
-            console.error("Error detallado:", error);
+            console.error("Error al publicar:", error.message);
             alert("Error al publicar: " + error.message);
         }
     };
@@ -100,6 +81,7 @@ const BecomeHost = () => {
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-6">
+                        {/* INPUTS DE TEXTO */}
                         <div>
                             <label className="block text-xs font-bold text-gray-600 mb-2 uppercase">Título</label>
                             <input
@@ -125,7 +107,7 @@ const BecomeHost = () => {
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-2 uppercase">Precio (COP/USD)</label>
+                                <label className="block text-xs font-bold text-gray-600 mb-2 uppercase">Precio (COP)</label>
                                 <input
                                     type="number"
                                     name="price"
@@ -147,6 +129,7 @@ const BecomeHost = () => {
                             ></textarea>
                         </div>
 
+                        {/* SECCIÓN DE FOTOS */}
                         <div className="pt-4 space-y-4">
                             <h3 className="text-sm font-bold text-gray-800 uppercase border-b pb-2">Fotos</h3>
                             <input
@@ -173,7 +156,7 @@ const BecomeHost = () => {
 
                         <button
                             type="submit"
-                            className="w-full bg-rose-500 text-white py-5 rounded-2xl font-bold text-xl hover:bg-rose-600 shadow-lg"
+                            className="w-full bg-rose-500 text-white py-5 rounded-2xl font-bold text-xl hover:bg-rose-600 shadow-lg active:scale-95 transition-all"
                         >
                             Publicar Alojamiento
                         </button>

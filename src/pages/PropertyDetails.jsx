@@ -11,7 +11,6 @@ const PropertyDetails = ({ noches = 1, datosBusqueda }) => {
     const [info, setInfo] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    // --- FUNCIÓN DE FORMATEO UNIFICADA ---
     const fM = (valor) => `$${parseFloat(valor || 0).toFixed(2)}`;
 
     useEffect(() => {
@@ -45,24 +44,68 @@ const PropertyDetails = ({ noches = 1, datosBusqueda }) => {
         fetchProperty();
     }, [id]);
 
-    const handleContinuarPago = async () => {
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session) {
-            navigate(`/booking/${info.id}`);
-        } else {
-            const confirmar = window.confirm(
-                "¡Casi listo! Para continuar con tu reserva en Colombia, debes iniciar sesión.\n\n¿Quieres ir a iniciar sesión ahora?"
-            );
-            if (confirmar) {
-                await supabase.auth.signInWithOAuth({
-                    provider: 'google',
-                    options: { redirectTo: window.location.href }
-                });
-            }
+    // --- 1. FUNCIÓN DE VALIDACIÓN (Limpia) ---
+        const verificarDisponibilidad = async (fechaInicio, fechaFin) => {
+        try {
+            const { data, error } = await supabase
+                .from("bookings")
+                .select("id")
+                .eq("property_id", id)
+                // Lógica de traslape real:
+                .lt("start_date", fechaFin)    // La reserva existente empieza antes de que yo salga
+                .gt("end_date", fechaInicio);  // La reserva existente termina después de que yo entre
+            
+            if (error) throw error;
+            return data.length === 0; // Si no hay resultados, está libre
+        } catch (err) {
+            console.error("Error en validación:", err.message);
+            return false; 
         }
     };
 
+    // --- 2. FUNCIÓN DEL BOTÓN ---
+    // --- 2. FUNCIÓN DEL BOTÓN (CORREGIDA PARA USO REAL) ---
+        const handleContinuarPago = async () => {
+            // Verificamos si hay sesión activa
+            const { data: { session } } = await supabase.auth.getSession();
+            
+            if (session) {
+                // Tomamos las fechas que vienen del buscador (datosBusqueda)
+                const checkIn = datosBusqueda?.checkIn;
+                const checkOut = datosBusqueda?.checkOut;
+
+                // Validamos que el usuario realmente haya buscado fechas
+                if (!checkIn || !checkOut) {
+                    alert("⚠️ RANGO DE FECHAS OCUPADAS, por favor seleciona otra fecha.");
+                    return;
+                }
+
+                // Ejecutamos la validación real con las fechas del usuario
+                // CAMBIO: Quitamos 'fechaPrueba' y usamos 'checkIn' y 'checkOut'
+                const estaLibre = await verificarDisponibilidad(checkIn, checkOut);
+
+                if (!estaLibre) {
+                    alert("❌ Estas fechas ya están reservadas en Colombia. Por favor elige otras.");
+                    return; 
+                }
+
+                // Si está libre, lo mandamos al formulario de pago
+                navigate(`/booking/${info.id}`);
+
+            } else {
+                // Si no está logueado, pedimos inicio de sesión
+                const confirmar = window.confirm(
+                    "¡Casi listo! Para reservar en Colombia, debes iniciar sesión.\n\n¿Quieres iniciar sesión con Google ahora?"
+                );
+                
+                if (confirmar) {
+                    await supabase.auth.signInWithOAuth({
+                        provider: 'google',
+                        options: { redirectTo: window.location.href }
+                    });
+                }
+            }
+        };
     if (loading) return <div className="p-20 text-center font-bold text-rose-500 text-xl">Cargando alojamiento en Colombia...</div>;
 
     if (!info) return (
@@ -72,7 +115,6 @@ const PropertyDetails = ({ noches = 1, datosBusqueda }) => {
         </div>
     );
 
-    // Cálculo del total para el widget
     const totalCalculado = info.price * (noches || 1);
 
     return (
@@ -149,11 +191,10 @@ const PropertyDetails = ({ noches = 1, datosBusqueda }) => {
                         </div>
                     </div>
 
-                    {/* WIDGET DE RESERVA FORMATEADO */}
+                    {/* WIDGET DE RESERVA */}
                     <div className="relative">
                         <div className="border rounded-2xl p-6 shadow-xl bg-white sticky top-28 border-rose-100">
                             <div className="mb-6 flex justify-between items-center">
-                                {/* CAMBIO: Precio por noche con decimales */}
                                 <span className="text-3xl font-bold">{fM(info.price)}</span>
                                 <span className="text-gray-500 text-sm">/ noche</span>
                             </div>
@@ -167,12 +208,10 @@ const PropertyDetails = ({ noches = 1, datosBusqueda }) => {
                             <div className="mt-6 space-y-4 border-t pt-4">
                                 <div className="flex justify-between text-gray-600 text-sm">
                                     <span className="underline italic">Subtotal por {noches} noches</span>
-                                    {/* CAMBIO: Subtotal formateado */}
                                     <span className="font-medium text-black">{fM(totalCalculado)}</span>
                                 </div>
                                 <div className="flex justify-between font-bold text-2xl pt-4 border-t border-gray-100">
                                     <span>Total</span>
-                                    {/* CAMBIO: Total final destacado */}
                                     <span className="text-rose-600">{fM(totalCalculado)}</span>
                                 </div>
                                 <p className="text-[10px] text-gray-400 text-center uppercase tracking-widest">Impuestos incluidos en Colombia</p>
