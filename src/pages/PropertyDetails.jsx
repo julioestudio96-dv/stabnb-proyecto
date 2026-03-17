@@ -10,6 +10,7 @@ const PropertyDetails = ({ noches = 1, datosBusqueda }) => {
     const navigate = useNavigate();
     const [info, setInfo] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [reserving, setReserving] = useState(false);
 
     const fM = (valor) => `$${parseFloat(valor || 0).toFixed(2)}`;
 
@@ -20,8 +21,10 @@ const PropertyDetails = ({ noches = 1, datosBusqueda }) => {
                 const { data, error } = await supabase
                     .from("properties_host")
                     .select("*")
-                    .eq("id", id)
+                    .eq("id", Number(id))
                     .maybeSingle();
+
+                if (error) throw error;
 
                 if (data) {
                     const galleryLinks = data.gallery && data.gallery.length > 0 
@@ -33,7 +36,7 @@ const PropertyDetails = ({ noches = 1, datosBusqueda }) => {
                     return;
                 }
             } catch (err) {
-                console.log("Error buscando en DB, intentando locales...", err);
+                console.log("Buscando en locales...", err);
             }
 
             const localMatch = propertiesLocales.find((item) => String(item.id) === String(id));
@@ -44,68 +47,87 @@ const PropertyDetails = ({ noches = 1, datosBusqueda }) => {
         fetchProperty();
     }, [id]);
 
-    // --- 1. FUNCIÓN DE VALIDACIÓN (Limpia) ---
-        const verificarDisponibilidad = async (fechaInicio, fechaFin) => {
+    const verificarDisponibilidad = async (llegada, salida) => {
         try {
             const { data, error } = await supabase
                 .from("bookings")
                 .select("id")
                 .eq("property_id", id)
-                // Lógica de traslape real:
-                .lt("start_date", fechaFin)    // La reserva existente empieza antes de que yo salga
-                .gt("end_date", fechaInicio);  // La reserva existente termina después de que yo entre
-            
+                .or(`and(check_in.lte.${salida},check_out.gte.${llegada})`);
+
             if (error) throw error;
-            return data.length === 0; // Si no hay resultados, está libre
+            return data.length === 0; 
         } catch (err) {
             console.error("Error en validación:", err.message);
             return false; 
         }
     };
 
-    // --- 2. FUNCIÓN DEL BOTÓN ---
-    // --- 2. FUNCIÓN DEL BOTÓN (CORREGIDA PARA USO REAL) ---
-        const handleContinuarPago = async () => {
-            // Verificamos si hay sesión activa
-            const { data: { session } } = await supabase.auth.getSession();
-            
-            if (session) {
-                // Tomamos las fechas que vienen del buscador (datosBusqueda)
-                const checkIn = datosBusqueda?.checkIn;
-                const checkOut = datosBusqueda?.checkOut;
+    // --- VARIABLES DE CÁLCULO (MODIFICADAS PARA PRECISIÓN) ---
+    const numHuespedes = parseInt(datosBusqueda?.huespedes || 1);
+    
+    const personasExtra = numHuespedes > 1 ? (numHuespedes - 1) : 0;
 
-                // Validamos que el usuario realmente haya buscado fechas
-                if (!checkIn || !checkOut) {
-                    alert("⚠️ RANGO DE FECHAS OCUPADAS, por favor seleciona otra fecha.");
-                    return;
-                }
+    // LINEA 1: Solo el alojamiento
+    const subtotalNoches = (info?.price || 0) * (noches || 1);
 
-                // Ejecutamos la validación real con las fechas del usuario
-                // CAMBIO: Quitamos 'fechaPrueba' y usamos 'checkIn' y 'checkOut'
-                const estaLibre = await verificarDisponibilidad(checkIn, checkOut);
+    // LINEA 2: Solo el cargo por personas (valor fijo)
+    const extraHuespedesTotal = personasExtra * 5; 
 
-                if (!estaLibre) {
-                    alert("❌ Estas fechas ya están reservadas en Colombia. Por favor elige otras.");
-                    return; 
-                }
+    // TOTAL FINAL: Suma de ambas líneas independientes
+    const totalCalculado = subtotalNoches + extraHuespedesTotal;
 
-                // Si está libre, lo mandamos al formulario de pago
-                navigate(`/booking/${info.id}`);
+    const handleContinuarPago = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session) {
+            const checkIn = datosBusqueda?.llegada || datosBusqueda?.checkIn;
+            const checkOut = datosBusqueda?.salida || datosBusqueda?.checkOut;
 
-            } else {
-                // Si no está logueado, pedimos inicio de sesión
-                const confirmar = window.confirm(
-                    "¡Casi listo! Para reservar en Colombia, debes iniciar sesión.\n\n¿Quieres iniciar sesión con Google ahora?"
-                );
-                
-                if (confirmar) {
-                    await supabase.auth.signInWithOAuth({
-                        provider: 'google',
-                        options: { redirectTo: window.location.href }
-                    });
-                }
+            if (!checkIn || !checkOut) {
+                alert("⚠️ Por favor, selecciona las fechas en el buscador de la página principal.");
+                return;
             }
-        };
+
+            setReserving(true);
+            const estaLibre = await verificarDisponibilidad(checkIn, checkOut);
+
+            if (!estaLibre) {
+                alert("❌ Estas fechas ya están reservadas. Por favor elige otras.");
+                setReserving(false);
+                return; 
+            }
+
+            // MODIFICACIÓN CRÍTICA: Se ajustó el objeto 'state' para que Booking.js 
+            // reciba exactamente lo que busca ('datosBusqueda' y 'noches')
+            navigate(`/booking/${info.id}`, { 
+                state: { 
+                    info, 
+                    datosBusqueda: { 
+                        llegada: checkIn, 
+                        salida: checkOut, 
+                        huespedes: numHuespedes 
+                    }, 
+                    total: totalCalculado, 
+                    noches: noches
+                } 
+            });
+            setReserving(false);
+
+        } else {
+            const confirmar = window.confirm(
+                "¡Casi listo! Para reservar en Colombia, debes iniciar sesión.\n\n¿Quieres iniciar sesión con Google ahora?"
+            );
+            
+            if (confirmar) {
+                await supabase.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: { redirectTo: window.location.href }
+                });
+            }
+        }
+    };
+
     if (loading) return <div className="p-20 text-center font-bold text-rose-500 text-xl">Cargando alojamiento en Colombia...</div>;
 
     if (!info) return (
@@ -115,14 +137,11 @@ const PropertyDetails = ({ noches = 1, datosBusqueda }) => {
         </div>
     );
 
-    const totalCalculado = info.price * (noches || 1);
-
     return (
         <div className="min-h-screen bg-white">
             <Navbar />
             <main className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 pt-4 md:pt-6">
                 
-                {/* CABECERA */}
                 <div className="mb-4 md:mb-6">
                     <Link to="/home">
                         <button className="flex items-center gap-2 text-gray-600 hover:text-black transition-all group">
@@ -135,12 +154,11 @@ const PropertyDetails = ({ noches = 1, datosBusqueda }) => {
                         <span>
                             ⭐ {info.rating || 'Nuevo'} ·{" "}
                             <span className="text-green-600 no-underline">Puntuación excelente</span> ·{" "}
-                            {info.location}
+                            {info.location}, Colombia
                         </span>
                     </div>
                 </div>
 
-                {/* GALERÍA */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 rounded-xl overflow-hidden shadow-md">
                     <div className="h-75 md:h-112.5">
                         <img
@@ -161,7 +179,6 @@ const PropertyDetails = ({ noches = 1, datosBusqueda }) => {
                     </div>
                 </div>
 
-                {/* CONTENIDO Y WIDGET */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 mt-8 mb-10">
                     <div className="lg:col-span-2 space-y-8">
                         <div className="border-b pb-6">
@@ -169,29 +186,26 @@ const PropertyDetails = ({ noches = 1, datosBusqueda }) => {
                                 <span>📋</span> Resumen de tu elección
                             </h2>
                             <p className="text-gray-600 mt-2 italic">
-                                {info.description}
+                                {info.description || "Sin descripción disponible."}
                             </p>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                            <div className="flex items-center gap-4 border p-4 rounded-xl shadow-sm">
-                                <span className="text-2xl">📍</span>
-                                <div>
-                                    <p className="text-xs text-gray-400 uppercase font-bold">Ubicación</p>
-                                    <p className="text-lg font-medium">{info.location}, Colombia</p>
-                                </div>
+                        <div className="border rounded-xl p-4 bg-gray-50 grid grid-cols-3 text-center">
+                            <div>
+                                <p className="text-[10px] font-bold uppercase text-gray-400">Llegada</p>
+                                <p className="font-medium">{datosBusqueda?.llegada || "---"}</p>
                             </div>
-                            <div className="flex items-center gap-4 border p-4 rounded-xl shadow-sm">
-                                <span className="text-2xl">⭐</span>
-                                <div>
-                                    <p className="text-xs text-gray-400 uppercase font-bold">Calificación</p>
-                                    <p className="text-lg font-medium">{info.rating || 'N/A'}</p>
-                                </div>
+                            <div className="border-x">
+                                <p className="text-[10px] font-bold uppercase text-gray-400">Salida</p>
+                                <p className="font-medium">{datosBusqueda?.salida || "---"}</p>
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-bold uppercase text-gray-400">Huéspedes</p>
+                                <p className="font-medium">{numHuespedes}</p>
                             </div>
                         </div>
                     </div>
 
-                    {/* WIDGET DE RESERVA */}
                     <div className="relative">
                         <div className="border rounded-2xl p-6 shadow-xl bg-white sticky top-28 border-rose-100">
                             <div className="mb-6 flex justify-between items-center">
@@ -201,20 +215,34 @@ const PropertyDetails = ({ noches = 1, datosBusqueda }) => {
 
                             <button 
                                 onClick={handleContinuarPago}
-                                className="w-full bg-rose-500 text-white py-4 rounded-xl font-bold text-lg hover:bg-rose-600 transition-all active:scale-95 shadow-lg flex items-center justify-center gap-2">
-                                <span>💳</span> Continuar al pago
+                                disabled={reserving}
+                                className="w-full bg-rose-500 text-white py-4 rounded-xl font-bold text-lg hover:bg-rose-600 transition-all active:scale-95 shadow-lg flex items-center justify-center gap-2 disabled:bg-gray-400"
+                            >
+                                <span>{reserving ? "⌛" : "💳"}</span> 
+                                {reserving ? "Verificando..." : "Continuar al pago"}
                             </button>
 
                             <div className="mt-6 space-y-4 border-t pt-4">
+                                {/* PRIMERA LÍNEA: ALOJAMIENTO */}
                                 <div className="flex justify-between text-gray-600 text-sm">
-                                    <span className="underline italic">Subtotal por {noches} noches</span>
-                                    <span className="font-medium text-black">{fM(totalCalculado)}</span>
+                                    <span className="underline italic">${info?.price} x {noches} noches</span>
+                                    <span className="font-medium text-black">{fM(subtotalNoches)}</span>
                                 </div>
+
+                                {/* SEGUNDA LÍNEA: PERSONAS EXTRA (SÓLO SI HAY MÁS DE 1) */}
+                                {personasExtra > 0 && (
+                                    <div className="flex justify-between text-rose-500 text-sm italic">
+                                        <span className="underline italic">Personas extra ({personasExtra} x $5.00)</span>
+                                        <span className="font-medium">{fM(extraHuespedesTotal)}</span>
+                                    </div>
+                                )}
+
+                                {/* TOTAL SUMADO */}
                                 <div className="flex justify-between font-bold text-2xl pt-4 border-t border-gray-100">
                                     <span>Total</span>
                                     <span className="text-rose-600">{fM(totalCalculado)}</span>
                                 </div>
-                                <p className="text-[10px] text-gray-400 text-center uppercase tracking-widest">Impuestos incluidos en Colombia</p>
+                                <p className="text-[10px] text-gray-400 text-center uppercase">Impuestos incluidos en Colombia</p>
                             </div>
                         </div>
                     </div>

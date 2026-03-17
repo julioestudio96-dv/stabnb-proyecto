@@ -52,7 +52,13 @@ const MyPosts = () => {
         <Navbar />
 
         <main className="row max-w-7xl mx-auto px-4 py-10 w-full">
-            <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4 px-3">
+            <Link to="/home">
+                <button className="flex items-center gap-2 text-gray-600 hover:text-black transition-all group">
+                    <span className="group-hover:-translate-x-1 transition-transform">←</span>
+                    <p className="font-medium">Volver</p>
+                </button>
+            </Link>
+            <div className="mb-10 mt-3 flex flex-col md:flex-row md:items-end justify-between gap-4 px-3">
             <div>
                 <h1 className="text-4xl font-black text-gray-900 tracking-tighter">
                 Mis Publicaciones
