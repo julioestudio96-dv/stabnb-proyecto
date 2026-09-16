@@ -37,7 +37,7 @@ function Navbar() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: window.location.origin + '/home',
+        redirectTo: window.location.origin + '/',
       },
     });
     if (error) console.log('Error al iniciar sesión con Google:', error.message);
