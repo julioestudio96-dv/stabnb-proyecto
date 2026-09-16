@@ -8,7 +8,7 @@ import { Link } from "react-router-dom";
 const MyBookings = () => {
     const [bookings, setBookings] = useState([]);
     const [loading, setLoading] = useState(true);
-
+    
     useEffect(() => {
     const fetchAllBookings = async () => { // <--- 1. Creamos una función interna async
         setLoading(true); // Es buena práctica avisar que estás cargando
@@ -35,12 +35,17 @@ const MyBookings = () => {
                 .from("properties_host")
                 .select("*");
 
-            // 5. El cruce de datos que ya tenías (¡está perfecto!)
+            // 5. CRUCE DE DATOS (Reservas Combinadas)
+            // Aquí "limpiamos" y unimos la información de Supabase con los detalles de las casas
             const bookingsConInfo = bookingsData.map((reserva) => {
+                // Convertimos el ID a String para asegurar que la comparación sea exacta
                 const pId = String(reserva.property_id); 
+                
+                // Buscamos los detalles de la casa en la DB o en los archivos locales
                 const detalle = propertiesDB?.find(p => String(p.id) === pId) 
                                 || propertiesLocales.find(p => String(p.id) === pId);
                 
+                // RETORNO COMBINADO: 
                 return { ...reserva, propiedad: detalle };
             });
 

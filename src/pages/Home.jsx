@@ -25,7 +25,7 @@ return (
     <div className="min-h-screen flex flex-col bg-gray-50">
         <Navbar />
         <main className="flex-1">
-        {/* PASO CLAVE: Aquí SearchBar llena la "nube" que usará PropertyDetails más adelante */}
+        {/* Aquí SearchBar llena la "nube" que usará PropertyDetails más adelante */}
         <SearchBar 
             datos={datosBusqueda}
             setDatos={setDatosBusqueda}
