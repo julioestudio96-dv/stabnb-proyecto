@@ -8,7 +8,7 @@ import { Link } from "react-router-dom";
 const MyBookings = () => {
     const [bookings, setBookings] = useState([]);
     const [loading, setLoading] = useState(true);
-    
+
     useEffect(() => {
     const fetchAllBookings = async () => { // <--- 1. Creamos una función interna async
         setLoading(true); // Es buena práctica avisar que estás cargando
@@ -157,6 +157,7 @@ const MyBookings = () => {
                                                 <span className="text-gray-400 font-bold uppercase text-[9px] tracking-widest mb-1">Huéspedes</span>
                                                 <span className="font-semibold text-gray-700">{item.guests || 1} {item.guests === 1 ? 'persona' : 'personas'}</span>
                                             </div>
+                                            <p> HOLA MUNDO</p>
                                         </div>
                                     </div>
 
